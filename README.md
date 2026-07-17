@@ -1,4 +1,4 @@
-# Issue Tools
+# Customizable Maintainer Issue Commands
 
 Automate issue triage workflows using fully customizable text commands in issue comments. This composite GitHub Action allows repository maintainers to close, reopen, or mark issues as duplicates directly from the comment interface.
 
@@ -16,7 +16,10 @@ Automate issue triage workflows using fully customizable text commands in issue 
 In the repository where you want to use the commands, create a new file named `.github/workflows/triage.yml`.
 
 ### 2. Add the Configuration
-Copy and paste the configuration below into your newly created workflow file.
+Copy and paste the configuration below into your newly created workflow file. 
+
+> [!IMPORTANT]
+> Make sure to keep the `permissions` block intact so the action has the necessary rights to modify issues. 
 
 ```yaml
 name: Triage
@@ -25,6 +28,10 @@ on:
   issue_comment:
     types: [created]
 
+# Required permissions for the GITHUB_TOKEN to modify issues
+permissions:
+  issues: write
+
 jobs:
   handle-commands:
     if: |
@@ -32,8 +39,6 @@ jobs:
       github.event.comment.author_association == 'MEMBER' || 
       github.event.comment.author_association == 'COLLABORATOR'
     runs-on: ubuntu-latest
-    permissions:
-      issues: write
 
     steps:
       - name: Run Triage Commands Action
@@ -75,3 +80,9 @@ Once deployed, repository maintainers can use the configured strings in any issu
 * Type `/reopen` to open a closed issue.
 * Type `/dup #123` to close the current issue and link it to issue 123.
 * Type `/dup "Exact Title of Another Issue"` to find and link the target issue by its text title.
+
+## Troubleshooting
+
+If the action encounters a `403 Forbidden` error when running commands, confirm that:
+1. The `permissions: issues: write` block is explicitly defined at the top level of your workflow file.
+2. Under repository **Settings** > **Actions** > **General** > **Workflow permissions**, the option **Read and write permissions** is selected.
