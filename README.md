@@ -1,4 +1,4 @@
-# Customizable Maintainer Issue Commands
+# Issue Tools
 
 Automate issue triage workflows using fully customizable text commands in issue comments. This composite GitHub Action allows repository maintainers to close, reopen, or mark issues as duplicates directly from the comment interface.
 
