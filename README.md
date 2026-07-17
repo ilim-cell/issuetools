@@ -37,7 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Issue Tools
-        uses: ilim-cell/issuetools@v1
+        uses: ilim-cell/issuetools@v1.1.1
 ```
 
 ## Configuration Inputs
