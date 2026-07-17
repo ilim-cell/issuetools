@@ -1,5 +1,5 @@
 name: 'Issue Tools'
-description: 'Close and reopen issues easily with slash commands.'
+description: 'Close, reopen, and lock issues easily with slash commands.'
 author: 'ilim-cell'
 branding:
   icon: 'check-square'
@@ -28,6 +28,10 @@ inputs:
     description: 'The prefix for duplicate commands (do not include trailing space).'
     required: true
     default: '/dup'
+  cmd_lock:
+    description: 'The exact command string to lock an issue conversation.'
+    required: true
+    default: '/lock'
 
   # --- OPTIONAL ERROR/SUCCESS MESSAGES ---
   msg_dup_not_found:
@@ -61,6 +65,7 @@ runs:
         CMD_CLOSE_SKIP: ${{ inputs.cmd_close_not_planned }}
         CMD_REOPEN: ${{ inputs.cmd_reopen }}
         CMD_DUP_PREFIX: ${{ inputs.cmd_dup_prefix }}
+        CMD_LOCK: ${{ inputs.cmd_lock }}
         
         # Error Strings (Optional)
         MSG_DUP_NOT_FOUND: ${{ inputs.msg_dup_not_found }}
@@ -104,6 +109,13 @@ runs:
           echo "Reopening issue..."
           gh issue reopen "$CURRENT_ISSUE" --repo "$REPO"
 
+        elif [[ "$CMD" == "$CMD_LOCK" ]]; then
+          echo "Locking issue thread..."
+          gh issue comment "$CURRENT_ISSUE" \
+            --repo "$REPO" \
+            --body "🔒 **Locking Thread:** This conversation has been locked by a maintainer. Please open a new issue for separate problems or edge cases."
+          gh issue lock "$CURRENT_ISSUE" --repo "$REPO" --reason "resolved"
+
         elif [[ "$CMD" =~ ^"$CMD_DUP_PREFIX"[[:space:]]+ ]]; then
           # Extract the arguments following the custom duplicate prefix cleanly
           ARG=$(echo "$CMD" | sed -E "s/^${CMD_DUP_PREFIX}[[:space:]]+//")
@@ -121,7 +133,6 @@ runs:
 
           if [[ -z "$TARGET_ISSUE" || "$TARGET_ISSUE" == "null" ]]; then
             echo "Error: Could not resolve target issue from input: $ARG"
-            # Safe replacement using variable substitution instead of sed evaluation
             FINAL_MSG="${MSG_DUP_NOT_FOUND//"{input}"/"$ARG"}"
             gh issue comment "$CURRENT_ISSUE" --repo "$REPO" --body "$FINAL_MSG"
             exit 1
