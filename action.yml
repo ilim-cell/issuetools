@@ -1,0 +1,143 @@
+name: 'Issue Commands'
+description: 'Close and reopen issues easily with slash commands.'
+author: 'ilim-cell'
+branding:
+  icon: 'check-square'
+  color: 'blue'
+
+inputs:
+  github_token:
+    description: 'The GITHUB_TOKEN used to interact with the GitHub API.'
+    required: true
+    default: ${{ github.token }}
+  
+  # --- MANDATORY CONFIGURATIONS ---
+  cmd_close_completed:
+    description: 'The exact command string to close an issue as completed.'
+    required: true
+    default: '/close completed'
+  cmd_close_not_planned:
+    description: 'The exact command string to close an issue as not planned.'
+    required: true
+    default: '/close not planned'
+  cmd_reopen:
+    description: 'The exact command string to reopen an issue.'
+    required: true
+    default: '/reopen'
+  cmd_dup_prefix:
+    description: 'The prefix for duplicate commands (do not include trailing space).'
+    required: true
+    default: '/dup'
+
+  # --- OPTIONAL ERROR/SUCCESS MESSAGES ---
+  msg_dup_not_found:
+    description: 'Error message when the duplicate target number/title cannot be resolved.'
+    required: false
+    default: '⚠️ **Error:** Unable to resolve duplicate target from "{input}". Please make sure the issue number is valid or that the title matches an existing issue exactly.'
+  msg_dup_missing_issue:
+    description: 'Error message when the duplicate issue number does not exist.'
+    required: false
+    default: '⚠️ **Error:** Unable to close as duplicate. Issue #{target} could not be found in this repository.'
+  msg_dup_success_comment:
+    description: 'The automated comment posted on the closed duplicate issue. Use {target} for the parent issue number.'
+    required: false
+    default: |
+      Hi! We've identified this issue as a duplicate of #{target} that already exists on this Issue Tracker. This specific instance is being closed in favor of tracking the concern over on the referenced thread. Thanks for your report!
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Process Slash Command
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+        REPO: ${{ github.repository }}
+        CURRENT_ISSUE: ${{ github.event.issue.number }}
+        COMMENT_BODY: ${{ github.event.comment.body }}
+        COMMENT_ID: ${{ github.event.comment.id }}
+        
+        # Core Parameters (Required)
+        CMD_CLOSE_DONE: ${{ inputs.cmd_close_completed }}
+        CMD_CLOSE_SKIP: ${{ inputs.cmd_close_not_planned }}
+        CMD_REOPEN: ${{ inputs.cmd_reopen }}
+        CMD_DUP_PREFIX: ${{ inputs.cmd_dup_prefix }}
+        
+        # Error Strings (Optional)
+        MSG_DUP_NOT_FOUND: ${{ inputs.msg_dup_not_found }}
+        MSG_DUP_MISSING: ${{ inputs.msg_dup_missing_issue }}
+        MSG_DUP_SUCCESS: ${{ inputs.msg_dup_success_comment }}
+      run: |
+        CMD=$(echo "$COMMENT_BODY" | head -n 1 | xargs)
+
+        echo "Command recognized: $CMD"
+        echo "Adding 👀 reaction to indicate processing..."
+        
+        REACTION_DATA=$(gh api \
+          -X POST \
+          -H "Accept: application/vnd.github+json" \
+          "/repos/$REPO/issues/comments/$COMMENT_ID/reactions" \
+          -f content="eyes")
+        
+        REACTION_ID=$(echo "$REACTION_DATA" | jq -r '.id')
+
+        cleanup() {
+          if [[ -n "$REACTION_ID" && "$REACTION_ID" != "null" ]]; then
+            echo "Cleaning up: Removing 👀 reaction..."
+            gh api \
+              -X DELETE \
+              -H "Accept: application/vnd.github+json" \
+              "/repos/$REPO/issues/comments/$COMMENT_ID/reactions/$REACTION_ID" || true
+          fi
+        }
+        trap cleanup EXIT
+
+        # --- PROCESS CUSTOM COMMANDS ---
+        if [[ "$CMD" == "$CMD_CLOSE_DONE" ]]; then
+          echo "Closing issue as completed..."
+          gh issue close "$CURRENT_ISSUE" --repo "$REPO" --reason "completed"
+
+        elif [[ "$CMD" == "$CMD_CLOSE_SKIP" ]]; then
+          echo "Closing issue as not planned..."
+          gh issue close "$CURRENT_ISSUE" --repo "$REPO" --reason "not planned"
+
+        elif [[ "$CMD" == "$CMD_REOPEN" ]]; then
+          echo "Reopening issue..."
+          gh issue reopen "$CURRENT_ISSUE" --repo "$REPO"
+
+        elif [[ "$CMD" =~ ^"$CMD_DUP_PREFIX"[[:space:]]+ ]]; then
+          # Extract the arguments following the custom duplicate prefix cleanly
+          ARG=$(echo "$CMD" | sed -E "s/^${CMD_DUP_PREFIX}[[:space:]]+//")
+          
+          TARGET_ISSUE=""
+
+          if [[ "$ARG" =~ ^#?[0-9]+ ]]; then
+            TARGET_ISSUE=$(echo "$ARG" | grep -oE '^#?[0-9]+' | sed 's/#//')
+            echo "Target identified as issue number: $TARGET_ISSUE"
+          else
+            TITLE=$(echo "$ARG" | sed -E 's/^"//; s/"$//')
+            echo "Searching for issue with exact title: $TITLE"
+            TARGET_ISSUE=$(gh issue list --repo "$REPO" --state all --limit 100 --search "in:title \"$TITLE\"" --json number,title | jq -r --arg title "$TITLE" '.[] | select(.title == $title) | .number' | head -n 1)
+          fi
+
+          if [[ -z "$TARGET_ISSUE" || "$TARGET_ISSUE" == "null" ]]; then
+            echo "Error: Could not resolve target issue from input: $ARG"
+            # Safe replacement using variable substitution instead of sed evaluation
+            FINAL_MSG="${MSG_DUP_NOT_FOUND//"{input}"/"$ARG"}"
+            gh issue comment "$CURRENT_ISSUE" --repo "$REPO" --body "$FINAL_MSG"
+            exit 1
+          fi
+          
+          if ! gh issue view "$TARGET_ISSUE" --repo "$REPO" >/dev/null 2>&1; then
+            echo "Error: Target duplicate issue #$TARGET_ISSUE does not exist."
+            FINAL_MSG="${MSG_DUP_MISSING//"{target}"/"$TARGET_ISSUE"}"
+            gh issue comment "$CURRENT_ISSUE" --repo "$REPO" --body "$FINAL_MSG"
+            exit 1
+          fi
+          
+          FINAL_SUCCESS_MSG="${MSG_DUP_SUCCESS//"{target}"/"$TARGET_ISSUE"}"
+          
+          gh issue close "$CURRENT_ISSUE" \
+            --repo "$REPO" \
+            --duplicate-of "$TARGET_ISSUE" \
+            --comment "$FINAL_SUCCESS_MSG"
+        fi
