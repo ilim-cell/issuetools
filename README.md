@@ -28,27 +28,15 @@ on:
   issue_comment:
     types: [created]
 
-# Required permissions for the GITHUB_TOKEN to modify issues
 permissions:
   issues: write
 
 jobs:
-  handle-commands:
-    if: |
-      github.event.comment.author_association == 'OWNER' || 
-      github.event.comment.author_association == 'MEMBER' || 
-      github.event.comment.author_association == 'COLLABORATOR'
+  triage-job:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Run Triage Commands Action
+      - name: Issue Tools
         uses: ilim-cell/issuetools@v1
-        with:
-          github_token: \${{ secrets.GITHUB_TOKEN }}
-          cmd_close_completed: '/close completed'
-          cmd_close_not_planned: '/close not planned'
-          cmd_reopen: '/reopen'
-          cmd_dup_prefix: '/dup'
 ```
 
 ## Configuration Inputs
