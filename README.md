@@ -1,11 +1,12 @@
 # Issue Tools
 
-Automate issue triage workflows using fully customizable text commands in issue comments. This composite GitHub Action allows repository maintainers to close, reopen, or mark issues as duplicates directly from the comment interface.
+Automate issue triage workflows using fully customizable text commands in issue comments. This composite GitHub Action allows repository maintainers to close, reopen, lock, or mark issues as duplicates directly from the comment interface.
 
 ## Features
 
 * Close issues as completed or not planned.
 * Reopen previously closed issues.
+* Lock issue conversation threads natively.
 * Mark issues as duplicates using either an issue number or an exact title match.
 * Full control over command syntax strings.
 * Configurable text templates for automated confirmation and error responses.
@@ -41,7 +42,7 @@ jobs:
 
 ## Configuration Inputs
 
-The following parameters must be configured in the `with` block of your workflow:
+The following parameters can be configured in the `with` block of your workflow if you wish to override the default patterns:
 
 | Input | Description | Required | Default |
 | :--- | :--- | :--- | :--- |
@@ -49,6 +50,7 @@ The following parameters must be configured in the `with` block of your workflow
 | `cmd_close_completed` | Command string to close an issue as completed. | Yes | `/close completed` |
 | `cmd_close_not_planned` | Command string to close an issue as not planned. | Yes | `/close not planned` |
 | `cmd_reopen` | Command string to reopen an issue. | Yes | `/reopen` |
+| `cmd_lock` | Command string to lock an issue conversation thread. | Yes | `/lock` |
 | `cmd_dup_prefix` | Prefix string for duplicate commands. | Yes | `/dup` |
 
 The following parameter configurations are optional. If left blank, the action uses standard system strings:
@@ -66,6 +68,7 @@ Once deployed, repository maintainers can use the configured strings in any issu
 * Type `/close completed` to close the issue as finished.
 * Type `/close not planned` to close the issue as skipped or canceled.
 * Type `/reopen` to open a closed issue.
+* Type `/lock` to freeze conversations on the current issue thread.
 * Type `/dup #123` to close the current issue and link it to issue 123.
 * Type `/dup "Exact Title of Another Issue"` to find and link the target issue by its text title.
 
