@@ -72,7 +72,14 @@ runs:
         MSG_DUP_MISSING: ${{ inputs.msg_dup_missing_issue }}
         MSG_DUP_SUCCESS: ${{ inputs.msg_dup_success_comment }}
       run: |
-        CMD=$(echo "$COMMENT_BODY" | head -n 1 | xargs)
+        # 1. Safely extract lines starting with "/" from anywhere in the body, then trim trailing whitespace
+        # This completely bypasses the xargs quoting bug and finds the command regardless of position.
+        CMD=$(echo "$COMMENT_BODY" | grep -E '^\/[a-zA-Z_-]' | head -n 1 | sed -e 's/[[:space:]]*$//')
+
+        # If no slash command line is found, default to trying the first line (safely trimmed)
+        if [[ -z "$CMD" ]]; then
+          CMD=$(echo "$COMMENT_BODY" | head -n 1 | awk '{$1=$1;print}')
+        fi
 
         echo "Command recognized: $CMD"
         echo "Adding 👀 reaction to indicate processing..."
@@ -117,8 +124,9 @@ runs:
           gh issue lock "$CURRENT_ISSUE" --repo "$REPO" --reason "resolved"
 
         elif [[ "$CMD" =~ ^"$CMD_DUP_PREFIX"[[:space:]]+ ]]; then
-          # Extract the arguments following the custom duplicate prefix cleanly
-          ARG=$(echo "$CMD" | sed -E "s/^${CMD_DUP_PREFIX}[[:space:]]+//")
+          # Extract the arguments following the custom duplicate prefix cleanly using safe bash extraction
+          ARG="${CMD#$CMD_DUP_PREFIX}"
+          ARG=$(echo "$ARG" | awk '{$1=$1;print}')
           
           TARGET_ISSUE=""
 
@@ -126,7 +134,9 @@ runs:
             TARGET_ISSUE=$(echo "$ARG" | grep -oE '^#?[0-9]+' | sed 's/#//')
             echo "Target identified as issue number: $TARGET_ISSUE"
           else
-            TITLE=$(echo "$ARG" | sed -E 's/^"//; s/"$//')
+            # Safely strip outer quotes using bash parameters instead of sed
+            TITLE="${ARG#\"}"
+            TITLE="${TITLE%\"}"
             echo "Searching for issue with exact title: $TITLE"
             TARGET_ISSUE=$(gh issue list --repo "$REPO" --state all --limit 100 --search "in:title \"$TITLE\"" --json number,title | jq -r --arg title "$TITLE" '.[] | select(.title == $title) | .number' | head -n 1)
           fi
