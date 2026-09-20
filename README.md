@@ -69,7 +69,7 @@ Once deployed, repository maintainers can use the configured strings in any issu
 * Type `/close not planned` to close the issue as skipped or canceled.
 * Type `/reopen` to open a closed issue.
 * Type `/lock` to freeze conversations on the current issue thread.
-* Type `/dup #123` to close the current issue and link it to issue 123.
+* Type `/dup #123` to close the current issue and link it to issue 123. (Quick tip: When searching for issues with #syntax, GitHub will pop-open a list of issues matching your # search)
 * Type `/dup "Exact Title of Another Issue"` to find and link the target issue by its text title.
 
 ## Troubleshooting
